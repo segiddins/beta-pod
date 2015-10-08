@@ -5,24 +5,24 @@ require 'bundler/friendly_errors'
 require 'open-uri'
 require 'tempfile'
 
-def sha_for_ref(ref)
-  url = "https://api.github.com/repos/CocoaPods/CocoaPods/commits/#{ref}"
+def sha_for_ref(ref, owner)
+  url = "https://api.github.com/repos/#{owner}/CocoaPods/commits/#{ref}"
   json = open(url).read
   json =~ /{"sha": "([0-9a-f]{7,40})"/xi
   $1
 end
 
-def gemfile_for_ref(ref)
-  url = "https://raw.githubusercontent.com/CocoaPods/CocoaPods/#{ref}/Gemfile"
-  open(url).string << "\n\n gem 'cocoapods', git: 'https://github.com/CocoaPods/CocoaPods', ref: '#{ref}'\n"
+def gemfile_for_ref(ref, owner)
+  url = "https://raw.githubusercontent.com/#{owner}/CocoaPods/#{ref}/Gemfile"
+  open(url).string << "\n\n gem 'cocoapods', git: 'https://github.com/#{owner}/CocoaPods', ref: '#{ref}'\n"
 end
 
-def lockfile_for_ref(ref)
-  url = "https://raw.githubusercontent.com/CocoaPods/CocoaPods/#{ref}/Gemfile.lock"
+def lockfile_for_ref(ref, owner)
+  url = "https://raw.githubusercontent.com/#{owner}/CocoaPods/#{ref}/Gemfile.lock"
   open(url).string
 end
 
-def install(ref)
+def install(ref, owner)
   old_root = Bundler.method(:root)
   def Bundler.root
     Pathname(Bundler::SharedHelpers.pwd).expand_path
@@ -30,11 +30,11 @@ def install(ref)
   ENV["BUNDLE_GEMFILE"] ||= "Gemfile"
 
   builder = Bundler::Dsl.new
-  builder.instance_eval(gemfile_for_ref(ref))
+  builder.instance_eval(gemfile_for_ref(ref, owner))
 
   definition = nil
   Tempfile.open('Gemfile.lock') do |lockfile|
-    lockfile.write(lockfile_for_ref(ref))
+    lockfile.write(lockfile_for_ref(ref, owner))
     lockfile.rewind
     definition = builder.to_definition(lockfile, {})
   end
@@ -52,11 +52,12 @@ def install(ref)
   bundler_module.send(:define_method, :root, old_root)
 end
 
-ref = ARGV.shift
-ref = sha_for_ref(ref)
+ref, owner = ARGV.shift.split(':', 2).reverse
+owner ||= 'CocoaPods'
+ref = sha_for_ref(ref, owner)
 
 begin
-  install(ref)
+  install(ref, owner)
 rescue => e
   puts e.backtrace
   Bundler.ui = Bundler::UI::Shell.new
