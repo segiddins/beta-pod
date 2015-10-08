@@ -1,0 +1,66 @@
+#!/usr/bin/env ruby
+
+require 'bundler'
+require 'bundler/friendly_errors'
+require 'open-uri'
+require 'tempfile'
+
+def sha_for_ref(ref)
+  url = "https://api.github.com/repos/CocoaPods/CocoaPods/commits/#{ref}"
+  json = open(url).read
+  json =~ /{"sha": "([0-9a-f]{7,40})"/xi
+  $1
+end
+
+def gemfile_for_ref(ref)
+  url = "https://raw.githubusercontent.com/CocoaPods/CocoaPods/#{ref}/Gemfile"
+  open(url).string << "\n\n gem 'cocoapods', git: 'https://github.com/CocoaPods/CocoaPods', ref: '#{ref}'\n"
+end
+
+def lockfile_for_ref(ref)
+  url = "https://raw.githubusercontent.com/CocoaPods/CocoaPods/#{ref}/Gemfile.lock"
+  open(url).string
+end
+
+def install(ref)
+  old_root = Bundler.method(:root)
+  def Bundler.root
+    Pathname(Bundler::SharedHelpers.pwd).expand_path
+  end
+  ENV["BUNDLE_GEMFILE"] ||= "Gemfile"
+
+  builder = Bundler::Dsl.new
+  builder.instance_eval(gemfile_for_ref(ref))
+
+  definition = nil
+  Tempfile.open('Gemfile.lock') do |lockfile|
+    lockfile.write(lockfile_for_ref(ref))
+    lockfile.rewind
+    definition = builder.to_definition(lockfile, {})
+  end
+  def definition.lock(*); end
+  definition.validate_ruby!
+
+  Bundler.ui = Bundler::UI::Silent.new
+  definition.resolve_remotely!
+  Bundler::Installer.install(Bundler.root, definition, :system => true)
+
+  runtime = Bundler::Runtime.new(Bundler.root, definition)
+  runtime.setup.require
+
+  bundler_module = class << Bundler; self; end
+  bundler_module.send(:define_method, :root, old_root)
+end
+
+ref = ARGV.shift
+ref = sha_for_ref(ref)
+
+begin
+  install(ref)
+rescue => e
+  puts e.backtrace
+  Bundler.ui = Bundler::UI::Shell.new
+  Bundler.with_friendly_errors { raise }
+end
+
+load Gem.bin_path('cocoapods', 'pod')
