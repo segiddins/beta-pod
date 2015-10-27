@@ -14,7 +14,7 @@ end
 
 def gemfile_for_ref(ref, owner)
   url = "https://raw.githubusercontent.com/#{owner}/CocoaPods/#{ref}/Gemfile"
-  open(url).string << "\n\n gem 'cocoapods', git: 'https://github.com/#{owner}/CocoaPods', ref: '#{ref}'\n"
+  open(url).string.gsub(/^gemspec$/, "gem 'cocoapods', git: 'https://github.com/#{owner}/CocoaPods', ref: '#{ref}'")
 end
 
 def lockfile_for_ref(ref, owner)
