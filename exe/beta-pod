@@ -43,7 +43,9 @@ def install(ref, owner)
 
   Bundler.ui = Bundler::UI::Silent.new
   definition.resolve_remotely!
-  Bundler::Installer.install(Bundler.root, definition, :system => true)
+  def definition.resolve_remotely!; end
+  def definition.resolve_with_cache!; end
+  Bundler::Installer.install(Bundler.root, definition, :system => true, :update => false)
 
   runtime = Bundler::Runtime.new(Bundler.root, definition)
   runtime.setup.require
