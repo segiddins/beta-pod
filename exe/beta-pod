@@ -2,24 +2,30 @@
 
 require 'bundler'
 require 'bundler/friendly_errors'
-require 'open-uri'
+require 'open3'
 require 'tempfile'
+
+def request(url)
+  output, error, status = Open3.capture3('curl', '-L', url)
+  raise "Error requesting #{url}:\n\n#{error}" if !status.success?
+  output
+end
 
 def sha_for_ref(ref, owner)
   url = "https://api.github.com/repos/#{owner}/CocoaPods/commits/#{ref}"
-  json = open(url).read
-  json =~ /{"sha": "([0-9a-f]{7,40})"/xi
+  json = request(url)
+  json =~ /\A{\s*"sha":\s*"([0-9a-f]{7,40})"/xi
   $1
 end
 
 def gemfile_for_ref(ref, owner)
   url = "https://raw.githubusercontent.com/#{owner}/CocoaPods/#{ref}/Gemfile"
-  open(url).string.gsub(/^gemspec$/, "gem 'cocoapods', git: 'https://github.com/#{owner}/CocoaPods', ref: '#{ref}'")
+  request(url).gsub(/^gemspec$/, "gem 'cocoapods', git: 'https://github.com/#{owner}/CocoaPods', ref: '#{ref}'")
 end
 
 def lockfile_for_ref(ref, owner)
   url = "https://raw.githubusercontent.com/#{owner}/CocoaPods/#{ref}/Gemfile.lock"
-  open(url).string
+  request(url)
 end
 
 def install(ref, owner)
