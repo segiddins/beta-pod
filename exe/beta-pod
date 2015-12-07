@@ -25,7 +25,14 @@ end
 
 def lockfile_for_ref(ref, owner)
   url = "https://raw.githubusercontent.com/#{owner}/CocoaPods/#{ref}/Gemfile.lock"
-  request(url)
+  request(url).gsub("PATH\n  remote: .\n  specs:\n    cocoapods", <<-LF.strip)
+GIT
+  remote: https://github.com/#{owner}/CocoaPods
+  revision: #{ref}
+  ref: #{ref}
+  specs:
+    cocoapods
+  LF
 end
 
 def install(ref, owner)
@@ -48,7 +55,7 @@ def install(ref, owner)
   definition.validate_ruby!
 
   Bundler.ui = Bundler::UI::Silent.new
-  definition.resolve_remotely!
+  definition.resolve_remotely! unless (definition.missing_specs.empty? rescue false)
   def definition.resolve_remotely!; end
   def definition.resolve_with_cache!; end
   Bundler::Installer.install(Bundler.root, definition, :system => true, :update => false)
